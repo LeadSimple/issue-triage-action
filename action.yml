@@ -5,6 +5,10 @@ inputs:
   ghToken:
     description: 'GitHub token'
     required: true
+  staleBaseField:
+    description: field to calculate on how old is the issue (available options: created_at, updated_at)
+    required: false
+    default: "update_at"
   staleAfter:
     description: number of days to consider an issue to be stale
     required: false
