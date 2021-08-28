@@ -14,6 +14,7 @@ GitHub action that deals with stale issues in your project.
 
 - `ghToken` **Required**, GitHub token
 
+- `staleBaseField` *string*, field to calculate on how old is the issue, __default__: `updated_at`
 - `staleAfter` *int*, number of days to consider an issue to be stale, __default__: `30`
 - `closeAfter` *int*, number of days after the issue should be closed (0 days means off, must be higher than `staleAfter`), __default__: `0`
 
