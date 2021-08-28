@@ -4613,7 +4613,7 @@ class ActionIssueTriage {
 
         if (
           this.opts.closeAfter > this.opts.staleAfter &&
-          this._isOlderThan(issue.updated_at, this.opts.closeAfter)
+          this._isOlderThan(this._baseDate(issue), this.opts.closeAfter)
         ) {
           isClosingDown = true;
         }
@@ -4671,7 +4671,7 @@ class ActionIssueTriage {
 
   _filterOldIssues(issues) {
     return issues.filter(issue =>
-      this._isOlderThan(issue.updated_at, this.opts.staleAfter)
+      this._isOlderThan(this._baseDate(issue), this.opts.staleAfter)
     );
   }
 
@@ -4682,7 +4682,7 @@ class ActionIssueTriage {
      */
     let message = messageTemplate.replace(
       '%DAYS_OLD%',
-      this._getDaysSince(issue.updated_at)
+      this._getDaysSince(this._baseDate(issue))
     );
     message = message.replace('%AUTHOR%', issue.user.login);
 
@@ -4788,6 +4788,14 @@ class ActionIssueTriage {
       return false;
     }
     return true;
+  }
+
+  _baseDate(issue) {
+    if (this.opts.staleBaseField === "created_at") {
+      return issue.created_at
+    } else {
+      return issue.updated_at
+    }
   }
 }
 
@@ -7749,6 +7757,7 @@ const closeComment = core.getInput('staleComment') || closeCommentDefault;
 const staleLabel = core.getInput('staleLabel') || 'STALE';
 const showLogs = core.getInput('showLogs') || 'true';
 const issueLabels = core.getInput('issueLabels');
+const staleBaseField = core.getInput('staleBaseField') || "updated_at";
 
 const GH_TOKEN = core.getInput('ghToken', {
   required: true,
@@ -7763,7 +7772,8 @@ const options = {
   closeComment,
   staleLabel,
   showLogs: showLogs === 'true',
-  issueLabels
+  issueLabels,
+  staleBaseField
 };
 
 const action = new ActionIssueTriage(new github.GitHub(GH_TOKEN), options);

@@ -219,9 +219,9 @@ class ActionIssueTriage {
 
   _baseDate(issue) {
     if (this.opts.staleBaseField === "created_at") {
-      issue.created_at
+      return issue.created_at
     } else {
-      issue.updated_at
+      return issue.updated_at
     }
   }
 }
