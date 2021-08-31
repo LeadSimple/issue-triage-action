@@ -12,24 +12,17 @@
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
   },
-  "husky": {
-    "hooks": {
-      "pre-push": "yarn build"
-    }
-  },
   "scripts": {
     "dev": "source .env && node dist/index.js",
     "prepublishOnly": "rm -rf dist/ && yarn build",
     "build": "ncc build src/index.js"
   },
   "dependencies": {
-    "@actions/core": "^1.1.0",
-    "@actions/github": "^1.1.0"
+    "@actions/core": "^1.5.0",
+    "@actions/github": "^5.0.0"
   },
   "devDependencies": {
-    "@zeit/ncc": "^0.20.5",
-    "eslint": "^6.6.0",
-    "eslint-config-krizzu": "^1.0.3",
-    "husky": "^3.1.0"
+    "@zeit/ncc": "^0.22.3",
+    "eslint": "^7.32.0"
   }
 }

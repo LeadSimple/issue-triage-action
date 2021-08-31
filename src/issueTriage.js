@@ -121,7 +121,7 @@ class ActionIssueTriage {
 
     const getIssuesForPage = async page => {
       const labels = this.opts.issueLabels ? { labels: this.opts.issueLabels } : {}
-      const { data: issuesResponse } = await this.kit.issues.listForRepo({
+      const { data: issuesResponse } = await this.kit.rest.issues.listForRepo({
         owner: this.opts.repoOwner,
         repo: this.opts.repoName,
         state: 'open',
@@ -136,7 +136,7 @@ class ActionIssueTriage {
     };
 
     try {
-      const { data: repoResponse } = await this.kit.repos.get({
+      const { data: repoResponse } = await this.kit.rest.repos.get({
         owner: this.opts.repoOwner,
         repo: this.opts.repoName,
       });
@@ -177,7 +177,7 @@ class ActionIssueTriage {
       };
 
       if (!dryRun) {
-        await this.kit.issues.createComment(params);
+        await this.kit.rest.issues.createComment(params);
       }
     } catch (e) {
       core.error(
@@ -204,7 +204,7 @@ class ActionIssueTriage {
 
     try {
       if (!dryRun) {
-        await this.kit.issues.update(params);
+        await this.kit.rest.issues.update(params);
       }
     } catch (e) {
       core.error(

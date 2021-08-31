@@ -34,6 +34,6 @@ const options = {
   staleBaseField
 };
 
-const action = new ActionIssueTriage(new github.GitHub(GH_TOKEN), options);
+const action = new ActionIssueTriage(new github.getOctokit(GH_TOKEN), options);
 
 action.run();
