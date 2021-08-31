@@ -1,6 +1,6 @@
-const github = require('@actions/github');
 const core = require('@actions/core');
 const ActionIssueTriage = require('./issueTriage');
+const ApiClient = require("./apiClient")
 
 const { GITHUB_REPOSITORY } = process.env;
 const [repoOwner, repoName] = GITHUB_REPOSITORY.split('/');
@@ -15,11 +15,17 @@ const closeComment = core.getInput('staleComment') || closeCommentDefault;
 const staleLabel = core.getInput('staleLabel') || 'STALE';
 const showLogs = core.getInput('showLogs') || 'true';
 const issueLabels = core.getInput('issueLabels');
-const staleBaseField = core.getInput('staleBaseField') || "updated_at";
+const staleBaseField = core.getInput('staleBaseField') || 'updated_at';
 
 const GH_TOKEN = core.getInput('ghToken', {
   required: true,
 });
+
+const log = (message) => {
+  if (showLogs === 'true') {
+    console.log(message)
+  }
+}
 
 const options = {
   repoOwner,
@@ -29,11 +35,19 @@ const options = {
   staleComment,
   closeComment,
   staleLabel,
-  showLogs: showLogs === 'true',
   issueLabels,
-  staleBaseField
+  staleBaseField,
+  log
 };
 
-const action = new ActionIssueTriage(new github.getOctokit(GH_TOKEN), options);
+const dryRun = !!process.env.GH_ACTION_LOCAL_TEST
+
+const apiClientOptions = {
+  ...options,
+  dryRun,
+  log
+}
+
+const action = new ActionIssueTriage(new ApiClient(GH_TOKEN, apiClientOptions), options);
 
 action.run();
