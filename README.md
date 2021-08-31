@@ -39,15 +39,26 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Find old issues and mark them stale
-      uses: Krizzu/issue-triage-action@v1.1.0
+      uses: LeadSimple/issue-triage-action@v1.3.0
       with:
         ghToken: ${{ secrets.GITHUB_TOKEN }}
         staleAfter: 30
         closeAfter: 60
-        issueLabels: bug
-        staleLabel: "STALE 📺"
+        staleLabel: "Stale"
         staleComment: "This issue is %DAYS_OLD% days old, marking as stale! cc: @%AUTHOR%"
         closeComment: "Issue last updated %DAYS_OLD% days ago! Closing down!"
+        staleBaseField: "updated_at",
+        showLogs: true
+    - name: Find overdue bugs and mark them overdue
+      uses: LeadSimple/issue-triage-action@v1.3.0
+      with:
+        ghToken: ${{ secrets.GITHUB_TOKEN }}
+        staleAfter: 30
+        closeAfter: 0
+        issueLabels: bug
+        staleLabel: "Overdue"
+        staleComment: "This bug is %DAYS_OLD% days old, marking as overdue! cc: @%AUTHOR%"
+        staleBaseField: "created_at",
         showLogs: true
 ```
 
@@ -70,3 +81,7 @@ with:
 To test action locally, create `.env` file, with content from `.env.example`.
 
 Run `dev` script to run.
+
+## Credits
+
+This project was forked from [Krizzu/issue-triage-action](https://github.com/Krizzu/issue-triage-action)

@@ -1,13 +1,13 @@
 {
-  "name": "@krizzu/issue_triage_action",
-  "version": "1.2.0",
+  "name": "@leadsimple/issue_triage_action",
+  "version": "1.3.0",
   "description": "Github action that finds and handles old issues in project",
   "main": "dist/index.js",
-  "author": "Krzysztof Borowy <dev@krizzu.dev>",
+  "author": "LeadSimple",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git://github.com/Krizzu/issue-triage-action.git"
+    "url": "git://github.com/LeadSimple/issue-triage-action.git"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/"
