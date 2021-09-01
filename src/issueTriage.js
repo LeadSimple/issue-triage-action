@@ -1,228 +1,136 @@
 /* eslint-disable no-throw-literal */
 
 const core = require('@actions/core');
-
-const dryRun = !!process.env.GH_ACTION_LOCAL_TEST;
+const { isOlderThan, getDaysSince } = require('./utils');
 
 class ActionIssueTriage {
-  constructor(kit, options) {
-    this.kit = kit;
+  constructor(apiClient, { log, ...options }) {
+    this.apiClient = apiClient;
     this.opts = options;
-  }
-
-  _log(message) {
-    if (!this.opts.showLogs) return;
-    console.log(message);
+    this.log = log
   }
 
   async run() {
     const allIssues = await this._getAllIssues();
 
     if (!allIssues.length) {
-      this._log(
-        `No issues found for ${this.opts.repoOwner}/${this.opts.repoName}`
-      );
+      this.log(`No issues found`);
       return;
     }
 
-    this._log(
-      `Total issues for ${this.opts.repoOwner}/${this.opts.repoName}: ${allIssues.length}`
-    );
+    this.log(`Total issues: ${allIssues.length}`);
 
-    const staleIssues = this._filterOldIssues(allIssues);
+    const staleIssues = this._filterIssuesToMarkAsStale(allIssues);
+    const markedStale = await this._countSuccessful((issue) => this._markAsStale(issue), staleIssues);
 
-    let markedStale = 0;
-    let closed = 0;
-
-    for (const issue of staleIssues) {
-      try {
-        let isClosingDown = false;
-
-        if (
-          this.opts.closeAfter > this.opts.staleAfter &&
-          this._isOlderThan(this._baseDate(issue), this.opts.closeAfter)
-        ) {
-          isClosingDown = true;
-        }
-
-        const postSuccess = await this._postComment(
-          issue,
-          isClosingDown ? this.opts.closeComment : this.opts.staleComment
-        );
-        if (postSuccess) {
-          const updateSuccess = await this._updateIssue(issue, isClosingDown);
-          if (updateSuccess) {
-            if (isClosingDown) {
-              closed++;
-            } else {
-              markedStale++;
-            }
-          } else {
-            throw `Could not update issue #${issue.number}.`;
-          }
-        } else {
-          throw `Could not post comment for #${issue.number}.`;
-        }
-      } catch (e) {
-        core.warning(e);
-      }
-    }
+    const issuesToClose = this._filterIssuesToClose(allIssues);
+    const closed = await this._countSuccessful((issue) => this._closeIssue(issue), issuesToClose)
 
     if (markedStale) {
-      this._log(`Issues marked as stale: ${markedStale}`);
+      this.log(`Issues marked as stale: ${markedStale}`);
     }
     if (closed) {
-      this._log(`Issues closed down: ${closed}`);
+      this.log(`Issues closed down: ${closed}`);
     }
-
     if (!markedStale && !closed) {
-      this._log(`No old issues found, sweet!`);
+      this.log(`No old issues found, sweet!`);
     }
-  }
-
-  _isIssue(issue) {
-    // PRs are also considered an issue
-    return !issue.pull_request;
-  }
-
-  _isOlderThan(date, days) {
-    const expirationDate = new Date() - days * 24 * 60 * 60 * 1000;
-    return new Date(date) < expirationDate;
-  }
-
-  _getDaysSince(dayCreated) {
-    const oneDay = 24 * 60 * 60 * 1000;
-    const now = new Date();
-    return Math.round(Math.abs((now - new Date(dayCreated)) / oneDay));
-  }
-
-  _filterOldIssues(issues) {
-    return issues.filter(issue =>
-      this._isOlderThan(this._baseDate(issue), this.opts.staleAfter)
-    );
-  }
-
-  _generateMessage(issue, messageTemplate) {
-    /**
-     * %DAYS_OLD% - how old is the issue
-     * %AUTHOR% - issue creator
-     */
-    let message = messageTemplate.replace(
-      '%DAYS_OLD%',
-      this._getDaysSince(this._baseDate(issue))
-    );
-    message = message.replace('%AUTHOR%', issue.user.login);
-
-    return message;
   }
 
   async _getAllIssues() {
-    const issuesPerPage = 100;
-
-    const getIssuesForPage = async page => {
-      const labels = this.opts.issueLabels ? { labels: this.opts.issueLabels } : {}
-      const { data: issuesResponse } = await this.kit.issues.listForRepo({
-        owner: this.opts.repoOwner,
-        repo: this.opts.repoName,
-        state: 'open',
-        sort: 'updated',
-        direction: 'desc',
-        per_page: issuesPerPage,
-        page,
-        ...labels
-      });
-
-      return issuesResponse.filter(this._isIssue);
-    };
-
     try {
-      const { data: repoResponse } = await this.kit.repos.get({
-        owner: this.opts.repoOwner,
-        repo: this.opts.repoName,
-      });
-
-      const totalIssues = repoResponse.open_issues_count;
-      const pageCount = Math.ceil(totalIssues / issuesPerPage);
-
-      const issuesPage = [];
-
-      for (let i = 1; i <= pageCount; i++) {
-        issuesPage.push(getIssuesForPage(i, issuesPerPage));
-      }
-
-      const allIssues = await Promise.all(issuesPage).then(response => {
-        const data = [];
-        response.forEach(responseIssue => {
-          data.push(...responseIssue);
-        });
-        return data;
-      });
-
-      return allIssues;
+      return await this.apiClient.getAllIssues(this.opts.issueLabels);
     } catch (e) {
       core.error(`Error while fetching issues: ${e.message}`);
       return [];
     }
   }
 
-  async _postComment(issue, commentTemplate) {
-    const message = this._generateMessage(issue, commentTemplate);
+  _filterIssuesToMarkAsStale(issues) {
+    if (
+      this.opts.closeAfter > 0 && // closing issues enabled
+      this.opts.closeAfter <= this.opts.staleAfter // we're closing the issue before making it stale
+    ) {
+      return [];
+    }
 
-    try {
-      const params = {
-        owner: this.opts.repoOwner,
-        repo: this.opts.repoName,
-        issue_number: issue.number,
-        body: message,
-      };
+    return issues
+      .filter(issue => isOlderThan(this._baseDate(issue), this.opts.staleAfter))
+      .filter(issue => !this._isMarkedAsStale(issue));
+  }
 
-      if (!dryRun) {
-        await this.kit.issues.createComment(params);
+  _filterIssuesToClose(issues) {
+    if (this.opts.closeAfter === 0) {
+      return [];
+    }
+
+    return issues.filter(issue =>
+      isOlderThan(this._baseDate(issue), this.opts.closeAfter)
+    );
+  }
+
+  async _countSuccessful(action, issues) {
+    let count = 0
+    for (const issue of issues) {
+      if (await action(issue)) {
+        count++
       }
-    } catch (e) {
-      core.error(
-        `Could not post a comment in issue #${issue.number}: ${e.message}`
-      );
+    }
+    return count
+  }
+
+  async _markAsStale(issue) {
+    this.log(`Marking #${issue.number} as stale.`)
+    const comment = this._generateMessage(issue, this.opts.staleComment);
+    if (!(await this.apiClient.postComment(issue, comment))) {
+      core.warning(`Could not post comment for #${issue.number}.`);
       return false;
+    }
+
+    if (!(await this.apiClient.addLabel(issue, this.opts.staleLabel))) {
+      core.warning(`Could not mark issue #${issue.number} as stale.`);
+      return false
     }
 
     return true;
   }
 
-  async _updateIssue(issue, closeIssue) {
-    const params = {
-      owner: this.opts.repoOwner,
-      repo: this.opts.repoName,
-      issue_number: issue.number,
-    };
-
-    if (closeIssue) {
-      params.state = 'closed';
-    } else {
-      params.labels = [...issue.labels, this.opts.staleLabel];
+  async _closeIssue(issue) {
+    this.log(`Closing #${issue.number}.`)
+    const comment = this._generateMessage(issue, this.opts.closeComment);
+    if (!(await this.apiClient.postComment(issue, comment))) {
+      core.warning(`Could not post comment for #${issue.number}.`);
+      return false
     }
 
-    try {
-      if (!dryRun) {
-        await this.kit.issues.update(params);
-      }
-    } catch (e) {
-      core.error(
-        `Could not ${closeIssue ? 'close' : 'update'} issue #${issue.number}: ${
-          e.message
-        }`
-      );
-      return false;
+    if (!(await this.apiClient.closeIssue(issue))) {
+      core.warning(`Could not close issue #${issue.number}.`);
+      return false
     }
+
     return true;
+  }
+
+  /**
+   * %DAYS_OLD% - how old is the issue
+   * %AUTHOR% - issue creator
+   */
+  _generateMessage(issue, messageTemplate) {
+    return messageTemplate
+      .replace('%DAYS_OLD%', getDaysSince(this._baseDate(issue)))
+      .replace('%AUTHOR%', issue.user.login);
+  }
+
+  _isMarkedAsStale(issue) {
+    return issue.labels.map(label => label.name).includes(this.opts.staleLabel);
   }
 
   _baseDate(issue) {
-    if (this.opts.staleBaseField === "created_at") {
-      return issue.created_at
-    } else {
-      return issue.updated_at
+    if (this.opts.staleBaseField === 'created_at') {
+      return issue.created_at;
     }
+
+    return issue.updated_at;
   }
 }
 
